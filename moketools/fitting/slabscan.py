@@ -1,8 +1,24 @@
 import numpy as np
 from scipy.integrate import simps
 from scipy.optimize import basinhopping, brute
+from time import time, strftime
+import numpy as np
+import holoviews as hv
+import matplotlib.pyplot as plt
+import pandas as pd
+import uncertainties as un
+from uncertainties import unumpy as unp
+from types import SimpleNamespace
+from pprint import pprint as pp
+import pint
+from functools import reduce
+from operator import add
+import matplotlib.pyplot as plt
+from tabulate import tabulate
+from scipy.optimize import curve_fit, root, minimize, basinhopping
+from moketools.fitting import slabscan as ss
+from copy import deepcopy
 import copy
-from time import time
 
 
 twopi = np.pi * 2
@@ -276,14 +292,16 @@ def load_sotpmoke_data(datapath):
         - [d](X|Y|T)(p|m|sym|asym)
             - (X|Y|T) is X, Y or Theta from the lockin
             - [d] Preadding the 'd' means std-dev of whatever follows
-            - (p|m) 'p' means B//-J and 'm' means B//J asssuming the usualy experimental geometry.
+            - (p|m) 'p' means B//-J and 'm' means B//J asssuming the usualy 
+              experimental geometry.
         - xum
             - scan displacement in um
     """
     data = pd.read_csv(datapath, sep='\t')
     res = SimpleNamespace()
     
-    res.Xp, res.dXp, res.Xm, res.dXm = [data[col] for col in ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')]
+    xcols = ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')
+    res.Xp, res.dXp, res.Xm, res.dXm = [data[col] for col in xcols]
     Xsym = (unp.uarray(res.Xp, res.dXp) + unp.uarray(res.Xm, res.dXm))/2
     res.Xsym = unp.nominal_values(Xsym)
     res.dXsym = unp.std_devs(Xsym)
@@ -291,7 +309,8 @@ def load_sotpmoke_data(datapath):
     res.Xasym = unp.nominal_values(Xasym)
     res.dXasym = unp.std_devs(Xasym)
     
-    res.Yp, res.dYp, res.Ym, res.dYm = [data[col] for col in ('Y+mean(V)', 'Y+std(V)', 'Y-mean(V)', 'Y-std(V)')]
+    ycols = ('Y+mean(V)', 'Y+std(V)', 'Y-mean(V)', 'Y-std(V)')
+    res.Yp, res.dYp, res.Ym, res.dYm = [data[col] for col in ycols]
     Ysym = (unp.uarray(res.Yp, res.dYp) + unp.uarray(res.Ym, res.dYm))/2
     res.Ysym = unp.nominal_values(Xsym)
     res.dYsym = unp.std_devs(Ysym)
@@ -299,7 +318,8 @@ def load_sotpmoke_data(datapath):
     res.Yasym = unp.nominal_values(Yasym)
     res.dYasym = unp.std_devs(Yasym)
 
-    res.Tp, res.dTp, res.Tm, res.dTm = [data[col] for col in ('T+mean(deg)', 'T+std(deg)', 'T-mean(deg)', 'T-std(deg)')]
+    tcols = ('T+mean(deg)', 'T+std(deg)', 'T-mean(deg)', 'T-std(deg)')
+    res.Tp, res.dTp, res.Tm, res.dTm = [data[col] for col in tcols]
     res.Tsym = (res.Tp + res.Tm)/2
     res.Tasym = (res.Tp - res.Tm)/2
     
@@ -312,13 +332,16 @@ def load_sotpmoke_data(datapath):
 
 
 def plot_raw_data(d):
-    layout = (hv.Curve((d.xum, d.Xp), label='X B+') + hv.Curve((d.xum, d.Xm), label='X B-') + 
-              hv.Curve((d.xum, d.Xsym), label='X Sym') + hv.Curve((d.xum, d.Xasym), label='X Asym'))
+    layout = (hv.Curve((d.xum, d.Xp), label='X B+') + 
+              hv.Curve((d.xum, d.Xm), label='X B-') + 
+              hv.Curve((d.xum, d.Xsym), label='X Sym') + 
+              hv.Curve((d.xum, d.Xasym), label='X Asym'))
     return layout()
 
 
 def plot_intensity(d):
-    return hv.Curve((d.xum, d.Imv), label='Intensity', kdims=['um'], vdims=['I (mV)'])
+    return hv.Curve((d.xum, d.Imv), label='Intensity', kdims=['um'], 
+                    vdims=['I (mV)'])
 
 
 def ebar_plot_raw_data(d, fs=None):
@@ -349,7 +372,8 @@ def ebar_plot_raw_data_overlap(d, fs=None):
         x.set_ylabel(yl, fontsize=fs)
     opts = dict(ecolor='k', barsabove=False, capthick=100, elinewidth=1)
     ax[0].errorbar(d.xum, 1e6*d.Xp, yerr=1e6*d.dXp, label='B+', **opts)
-    ax[0].errorbar(d.xum, 1e6*d.Xm, yerr=1e6*d.dXm, label='B-', color='r', **opts)
+    ax[0].errorbar(d.xum, 1e6*d.Xm, yerr=1e6*d.dXm, label='B-', color='r', 
+                   **opts)
     ax[1].errorbar(d.xum, 1e6*d.Xsym, yerr=1e6*d.dXsym, **opts)
     ax[2].errorbar(d.xum, 1e6*d.Xasym, yerr=1e6*d.dXasym, **opts)
     ax[0].legend(loc='best')
@@ -362,10 +386,12 @@ def intensity_fit_plot(d, params):
         params: (center, height, width, fwhm, cutoff_fwhm, npoints)
     """
     Imv = d.Imv - min(d.Imv)
-    dataplot = hv.Scatter((d.xum, Imv), label='data', kdims=['um'], vdims=['I (mV)'])
+    dataplot = hv.Scatter((d.xum, Imv), label='data', kdims=['um'], 
+                          vdims=['I (mV)'])
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
-    fit = ss.box_func(fitx/1e6, **params)
-    fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], vdims=['I (mV)'])
+    fit = box_func(fitx/1e6, **params)
+    fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], 
+                       vdims=['I (mV)'])
     return dataplot * fitplot
 
 def asymmetric_fit_plot(d, params):
@@ -373,9 +399,10 @@ def asymmetric_fit_plot(d, params):
     Args:
         params: (center, height, width, fwhm, cutoff_fwhm, npoints)
     """
-    dataplot = hv.Scatter((d.xum, d.Xasym), label='data', kdims=['um'], vdims=['uV'])
+    dataplot = hv.Scatter((d.xum, d.Xasym * 1e6), label='data', kdims=['um'], 
+                          vdims=['uV'])
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
-    fit = ss.box_func(fitx/1e6, **params)
+    fit = box_func(fitx/1e6, **params) * 1e6
     fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], vdims=['uV'])
     return dataplot * fitplot
 
@@ -384,23 +411,41 @@ def symmetric_fit_plot(d, params, add_offset=True):
     Args:
         params: (center, height, width, fwhm, cutoff_fwhm, npoints)
     """
-    dataplot = hv.Scatter((d.xum, d.Xsym), label='data', kdims=['um'], vdims=['uV'])
+    dataplot = hv.Scatter((d.xum, d.Xsym * 1e6), label='data', kdims=['um'], 
+                          vdims=['uV'])
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
-    fit = ss.oersted_func(fitx/1e6, **params)
+    fit = oersted_func(fitx/1e6, **params) * 1e6
     if add_offset:
         fit += (max(d.Xsym) + min(d.Xsym)) / 2.0
     fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], vdims=['uV'])
     return dataplot * fitplot
+
+
+def symmetric_field_plot(d, params):
+    """Quick intensity plot. Compare data with params generated curve.
+    Args:
+        params: dict of (center, height, width, fwhm, cutoff_fwhm, npoints)
+    """
+    newparams = deepcopy(params)
+    newparams['height'] = 1
+    fitx = np.linspace(min(d.xum), max(d.xum), 200)
+    fit_smoothed = oersted_func(fitx/1e6, **newparams) * 1e6
+    newparams['fwhm'] = 1e-8
+    fit_notsmoothed = oersted_func(fitx/1e6, **newparams) * 1e6
+    fitplot_s = hv.Curve((fitx, fit_smoothed), kdims=['um'], vdims=['uV'])
+    fitplot_ns = hv.Curve((fitx, fit_notsmoothed), kdims=['um'], vdims=['uV'])
+    return fitplot_s * fitplot_ns
+
 
 def pp_params(params, noprint=False):
     params = deepcopy(params)
     params['center'] *= 1e6
     params['width'] *= 1e6
     params['fwhm'] *= 1e6
-    fmt_str = ("center: {center:.1f} um\n"
-               "width:  {width:.1f} um\n"
-               "height:  {height:.1f} \n"
-               "fwhm:  {fwhm:.1f} um\n")
+    fmt_str = ("center: {center:.2f} um\n"
+               "width:  {width:.2f} um\n"
+               "height:  {height:.2e} \n"
+               "fwhm:  {fwhm:.2f} um\n")
     for key in ('thickness', 'current', 'cutoff_fwhm', 'npoints'):
         if key in params.keys():
             fmt_str += "{key}:  {{{key}}}\n".format(**dict(key=key))
