@@ -429,11 +429,11 @@ def symmetric_field_plot(d, params):
     newparams = deepcopy(params)
     newparams['height'] = 1
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
-    fit_smoothed = oersted_func(fitx/1e6, **newparams) * 1e6
+    fit_smoothed = oersted_func(fitx/1e6, **newparams) * 1e3
     newparams['fwhm'] = 1e-8
-    fit_notsmoothed = oersted_func(fitx/1e6, **newparams) * 1e6
-    fitplot_s = hv.Curve((fitx, fit_smoothed), kdims=['um'], vdims=['uV'])
-    fitplot_ns = hv.Curve((fitx, fit_notsmoothed), kdims=['um'], vdims=['uV'])
+    fit_notsmoothed = oersted_func(fitx/1e6, **newparams) * 1e3
+    fitplot_s = hv.Curve((fitx, fit_smoothed), kdims=['um'], vdims=['mT'])
+    fitplot_ns = hv.Curve((fitx, fit_notsmoothed), kdims=['um'], vdims=['mT'])
     return fitplot_s * fitplot_ns
 
 
