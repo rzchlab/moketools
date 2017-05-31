@@ -286,7 +286,8 @@ def pp_params_ranges(ps, ranges, str_only=False):
         print(res_str)
         return res_str
 
-def load_sotpmoke_data(datapath):
+
+def load_sotpmoke_data(datapath, take_slice=None):
     """Load sot pmoke datafile from `datapath` and put useful columns into 
     a namespace object. Attributes are:
         - [d](X|Y|T)(p|m|sym|asym)
@@ -296,8 +297,19 @@ def load_sotpmoke_data(datapath):
               experimental geometry.
         - xum
             - scan displacement in um
+        - take_slice: if passed must be (start, stop, step). Any can
+          be None in which case it will default to (0, N, 1) respectively.
     """
     data = pd.read_csv(datapath, sep='\t')
+
+    if take_slice is not None:
+        istart, istop, istep = take_slice
+        istart = 0 if istart is None else istart
+        istop = len(data) if istop is None else istop
+        istep = 1 if istep is None else istep
+        data = data[istart:istop:istep]
+
+
     res = SimpleNamespace()
     
     xcols = ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')
@@ -327,6 +339,8 @@ def load_sotpmoke_data(datapath):
     
     res.I = data['I(mv)']
     res.Imv = res.I * 1e3
+
+    res.df = data
     
     return res
 
@@ -394,6 +408,7 @@ def intensity_fit_plot(d, params):
                        vdims=['I (mV)'])
     return dataplot * fitplot
 
+
 def asymmetric_fit_plot(d, params):
     """Quick intensity plot. Compare data with params generated curve.
     Args:
@@ -406,6 +421,7 @@ def asymmetric_fit_plot(d, params):
     fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], vdims=['uV'])
     return dataplot * fitplot
 
+
 def symmetric_fit_plot(d, params, add_offset=True):
     """Quick intensity plot. Compare data with params generated curve.
     Args:
@@ -414,9 +430,9 @@ def symmetric_fit_plot(d, params, add_offset=True):
     dataplot = hv.Scatter((d.xum, d.Xsym * 1e6), label='data', kdims=['um'], 
                           vdims=['uV'])
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
-    fit = oersted_func(fitx/1e6, **params) * 1e6
     if add_offset:
-        fit += (max(d.Xsym) + min(d.Xsym)) / 2.0
+        offset = (max(d.Xsym) + min(d.Xsym)) / 2.0
+    fit = (oersted_func(fitx/1e6, **params) + offset) * 1e6
     fitplot = hv.Curve((fitx, fit), label='fit', kdims=['um'], vdims=['uV'])
     return dataplot * fitplot
 
@@ -456,6 +472,7 @@ def pp_params(params, noprint=False):
         return fmt_str.format(**params)
     else:
         print(fmt_str.format(**params))
+
         
 def find_oersted_offset(ydata):
     return (max(ydata) + min(ydata))/2
