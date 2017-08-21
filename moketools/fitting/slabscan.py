@@ -287,7 +287,7 @@ def pp_params_ranges(ps, ranges, str_only=False):
         return res_str
 
 
-def load_sotpmoke_data(datapath, take_slice=None):
+def load_sotpmoke_data(datapath, take_slice=None, date=0):
     """Load sot pmoke datafile from `datapath` and put useful columns into 
     a namespace object. Attributes are:
         - [d](X|Y|T)(p|m|sym|asym)
@@ -299,8 +299,14 @@ def load_sotpmoke_data(datapath, take_slice=None):
             - scan displacement in um
         - take_slice: if passed must be (start, stop, step). Any can
           be None in which case it will default to (0, N, 1) respectively.
+        - date (int): Date of the measurement in the format 'yymmdd'. This
+            will be used to determine the type of datafile.
     """
-    data = pd.read_csv(datapath, sep='\t')
+
+    if date < 170727:
+        data = pd.read_csv(datapath, sep='\t')
+    else:
+        data = pd.read_csv(datapath, sep='\t', skiprows=1)
 
     if take_slice is not None:
         istart, istop, istep = take_slice
@@ -337,8 +343,14 @@ def load_sotpmoke_data(datapath, take_slice=None):
     
     res.xum = data['displ(um)']
     
-    res.I = data['I(mv)']
-    res.Imv = res.I * 1e3
+    if date < 170727:
+        res.I = data['I(mv)']
+        res.Imv = res.I * 1e3
+    else:
+        res.Ip = data['I+mean(mv)']
+        res.Ip_mv = data['I+mean(mv)'] * 1000
+        res.Im = data['I-mean(mv)']
+        res.Im_mv = data['I-mean(mv)'] * 1000
 
     res.df = data
     
@@ -354,8 +366,14 @@ def plot_raw_data(d):
 
 
 def plot_intensity(d):
-    return hv.Curve((d.xum, d.Imv), label='Intensity', kdims=['um'], 
-                    vdims=['I (mV)'])
+    try:
+        return hv.Curve((d.xum, d.Imv), label='Intensity', kdims=['um'], 
+                        vdims=['I (mV)'])
+    except:
+        return (hv.Curve((d.xum, d.Ip_mv), label='Intensity +B', kdims=['um'], 
+                        vdims=['I (mV)']) *
+                hv.Curve((d.xum, d.Im_mv), label='Intensity -B', kdims=['um'], 
+                                        vdims=['I (mV)']))
 
 
 def ebar_plot_raw_data(d, fs=None):
@@ -399,7 +417,10 @@ def intensity_fit_plot(d, params):
     Args:
         params: (center, height, width, fwhm, cutoff_fwhm, npoints)
     """
-    Imv = d.Imv - min(d.Imv)
+    try:
+        Imv = d.Imv - min(d.Imv)
+    except:
+        Imv = d.Ip_mv - min(d.Ip_mv)
     dataplot = hv.Scatter((d.xum, Imv), label='data', kdims=['um'], 
                           vdims=['I (mV)'])
     fitx = np.linspace(min(d.xum), max(d.xum), 200)
