@@ -1,24 +1,13 @@
 import numpy as np
 from scipy.integrate import simps
-from scipy.optimize import basinhopping, brute
-from time import time, strftime
-import numpy as np
+from scipy.optimize import brute
+from time import time
 import holoviews as hv
 import matplotlib.pyplot as plt
 import pandas as pd
-import uncertainties as un
 from uncertainties import unumpy as unp
 from types import SimpleNamespace
-from pprint import pprint as pp
-import pint
-from functools import reduce
-from operator import add
-import matplotlib.pyplot as plt
-from tabulate import tabulate
-from scipy.optimize import curve_fit, root, minimize, basinhopping
-from moketools.fitting import slabscan as ss
 from copy import deepcopy
-import copy
 
 
 twopi = np.pi * 2
@@ -74,7 +63,6 @@ def By_surface(x, w, d, j):
 
 def By_2d_approximation(x, w, d, j):
     """Approximation of By_surface valid except near edges of slab."""
-    mu0_over_4pi = 1e-7
     return 2e-7 * j * d * np.log((w/2 + x) / (w/2 - x))
 
 
@@ -238,8 +226,8 @@ def compare_params(title1, ps1, title2, ps2, str_only=False):
                "thickness:  {:5.2f} nm   {:5.2f} nm \n"
                "fwhm:       {:5.2f} um   {:5.2f} um \n"
                "current:    {:5.2f} mA   {:5.2f} mA \n")
-    center1, widht1, height1, fwhm1 = ps1[:4]
-    center2, widht2, height2, fwhm2 = ps2[:4]
+    center1, width1, height1, fwhm1 = ps1[:4]
+    center2, width2, height2, fwhm2 = ps2[:4]
     try:
         thickness1, current1 = ps1[4:]
         thickness2, current2 = ps2[4:]
