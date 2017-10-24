@@ -329,6 +329,11 @@ def load_sotpmoke_data(datapath, take_slice=None, date=0):
     res.Tsym = (res.Tp + res.Tm)/2
     res.Tasym = (res.Tp - res.Tm)/2
     
+    rcols = ('R+mean(V)', 'R+std(V)', 'R-mean(V)', 'R-std(V)')
+    res.Rp, res.dRp, res.Rm, res.dRm = [data[col] for col in rcols]
+    res.Rsym = (res.Rp + res.Rm)/2
+    res.Rasym = (res.Rp - res.Rm)/2
+    
     res.xum = data['displ(um)']
     
     if date < 170727:
