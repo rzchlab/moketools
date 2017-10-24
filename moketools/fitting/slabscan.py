@@ -405,6 +405,43 @@ def ebar_plot_raw_data_overlap(d, fs=None):
     return fig, ax
 
 
+def plot_phased_data(d, phi_deg=35):
+    Xp_ph = d.Rp * np.cos(np.deg2rad(d.Tp + phi_deg))
+    Xm_ph = d.Rm * np.cos(np.deg2rad(d.Tm + phi_deg))
+    Yp_ph = d.Rp * np.sin(np.deg2rad(d.Tp + phi_deg))
+    Ym_ph = d.Rm * np.sin(np.deg2rad(d.Tm + phi_deg))
+    Xsym_ph = (Xp_ph + Xm_ph)/2
+    Xasym_ph = (Xp_ph - Xm_ph)/2
+    return (hv.Curve((d.xum, Xp_ph), label='X+ ph') * hv.Curve((d.xum, Xm_ph), label='X- ph')
+     + hv.Curve((d.xum, Yp_ph), label='Y- ph') * hv.Curve((d.xum, Ym_ph), label='Y+ ph')
+     + hv.Curve((d.xum, Xsym_ph), label='Xsym') * hv.Curve((d.xum, Xasym_ph), label='Xasym'))
+
+
+def plot_phase_exploration(d):    
+    gridspace = hv.GridSpace(kdims=['type'])
+    
+    X_curves = {}
+    Y_curves = {}
+    sym_curves = {}
+    
+    for phi in range(0, 185, 5):
+        Xp_ph = d.Rp * np.cos(np.deg2rad(d.Tp + phi))
+        Xm_ph = d.Rm * np.cos(np.deg2rad(d.Tm + phi))
+        Yp_ph = d.Rp * np.sin(np.deg2rad(d.Tp + phi))
+        Ym_ph = d.Rm * np.sin(np.deg2rad(d.Tm + phi))
+        Xsym_ph = (Xp_ph + Xm_ph)/2
+        Xasym_ph = (Xp_ph - Xm_ph)/2
+        X_curves[phi] = hv.Curve((d.xum, Xp_ph), label='X+ ph') * hv.Curve((d.xum, Xm_ph), label='X- ph')
+        Y_curves[phi] = hv.Curve((d.xum, Yp_ph), label='Y+ ph') * hv.Curve((d.xum, Ym_ph), label='Y- ph')
+        sym_curves[phi] = hv.Curve((d.xum, Xsym_ph), label='+') * hv.Curve((d.xum, Xasym_ph), label='-')
+    
+    gridspace['X'] = hv.HoloMap(X_curves, kdims=['phi'], label='X')
+    gridspace['Y'] = hv.HoloMap(Y_curves, kdims=['phi'], label='Y')
+    gridspace['sym-asym'] = hv.HoloMap(sym_curves, kdims=['phi'], label='sym-asym')
+    
+    return  gridspace(plot={'show_legend': True})
+
+
 def intensity_fit_plot(d, params):
     """Quick intensity plot. Compare data with params generated curve.
     Args:
