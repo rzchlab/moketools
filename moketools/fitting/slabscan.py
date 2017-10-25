@@ -273,9 +273,45 @@ def pp_params_ranges(ps, ranges, str_only=False):
     else:
         print(res_str)
         return res_str
+    
+    
+def _load_variable_pair(data, cols):
+    p, dp, m, dm = [data[col] for col in cols]
+    parr = unp.uarray(p, dp)
+    marr = unp.uarray(m, dm)
+    symarr = (parr + marr)/2
+    asymarr = (parr - marr)/2
+    sym, dsym = unp.nominal_values(symarr), unp.std_devs(symarr)
+    asym, dasym = unp.nominal_values(asymarr), unp.std_devs(asymarr)
+    return p, dp , m , dm , sym, dsym, asym, dasym
+#    return {'p': p, 'dp': dp, 'm': m, 'dm': dm, 'sym': sym, 'dsym': dsym, 
+#            'asym': asym, 'dasym': dasym}
 
 
-def load_sotpmoke_data(datapath, take_slice=None, date=0):
+def _variables_to_namespace(namespace, name_prefix, vals):
+    names = ('xp', 'dxp', 'xm', 'dxm', 'xsym', 'dxsym', 'xasym', 'dxasym')
+    for n, v in zip(names, vals):
+        n = n.replace('x', name_prefix)
+        setattr(namespace, n, v)
+        
+def _usplit(uarr):
+    return unp.nominal_values(uarr), unp.std_devs(uarr)
+
+def _sym_asym(p, m):
+    return (p + m)/2, (p - m)/2
+
+
+def _process_cols(data, name_prefix, res):
+    cols = ('x+mean(V)', 'x+std(V)', 'x-mean(V)', 'x-std(V)')
+    cols = [c.replace('x', name_prefix) for c in cols]
+    if name_prefix == 'T':
+        cols = [c.replace('V', 'deg') for c in cols]
+    vals = _load_variable_pair(data, cols)
+    _variables_to_namespace(res, name_prefix, vals)
+    return vals
+
+
+def load_sotpmoke_data(datapath, take_slice=None, date=0, phase_deg=0):
     """Load sot pmoke datafile from `datapath` and put useful columns into 
     a namespace object. Attributes are:
         - [d](X|Y|T)(p|m|sym|asym)
@@ -289,6 +325,8 @@ def load_sotpmoke_data(datapath, take_slice=None, date=0):
           be None in which case it will default to (0, N, 1) respectively.
         - date (int): Date of the measurement in the format 'yymmdd'. This
             will be used to determine the type of datafile.
+        - phase_deg (float): If not zero or None, X and Y will be recomputed
+                             from R and Theta e.g. X = R cos(T+phase).
     """
 
     if date < 170727:
@@ -303,37 +341,32 @@ def load_sotpmoke_data(datapath, take_slice=None, date=0):
         istep = 1 if istep is None else istep
         data = data[istart:istop:istep]
 
-
     res = SimpleNamespace()
-    
-    xcols = ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')
-    res.Xp, res.dXp, res.Xm, res.dXm = [data[col] for col in xcols]
-    Xsym = (unp.uarray(res.Xp, res.dXp) + unp.uarray(res.Xm, res.dXm))/2
-    res.Xsym = unp.nominal_values(Xsym)
-    res.dXsym = unp.std_devs(Xsym)
-    Xasym = (unp.uarray(res.Xp, res.dXp) - unp.uarray(res.Xm, res.dXm))/2
-    res.Xasym = unp.nominal_values(Xasym)
-    res.dXasym = unp.std_devs(Xasym)
-    
-    ycols = ('Y+mean(V)', 'Y+std(V)', 'Y-mean(V)', 'Y-std(V)')
-    res.Yp, res.dYp, res.Ym, res.dYm = [data[col] for col in ycols]
-    Ysym = (unp.uarray(res.Yp, res.dYp) + unp.uarray(res.Ym, res.dYm))/2
-    res.Ysym = unp.nominal_values(Xsym)
-    res.dYsym = unp.std_devs(Ysym)
-    Yasym = (unp.uarray(res.Yp, res.dYp) - unp.uarray(res.Ym, res.dYm))/2
-    res.Yasym = unp.nominal_values(Yasym)
-    res.dYasym = unp.std_devs(Yasym)
-
-    tcols = ('T+mean(deg)', 'T+std(deg)', 'T-mean(deg)', 'T-std(deg)')
-    res.Tp, res.dTp, res.Tm, res.dTm = [data[col] for col in tcols]
-    res.Tsym = (res.Tp + res.Tm)/2
-    res.Tasym = (res.Tp - res.Tm)/2
-    
-    rcols = ('R+mean(V)', 'R+std(V)', 'R-mean(V)', 'R-std(V)')
-    res.Rp, res.dRp, res.Rm, res.dRm = [data[col] for col in rcols]
-    res.Rsym = (res.Rp + res.Rm)/2
-    res.Rasym = (res.Rp - res.Rm)/2
-    
+    vals ={pref:  _process_cols(data, pref, res) for pref in ('T', 'R', 'X', 'Y')}
+         
+    if not(phase_deg == 0 or phase_deg is None):
+        d2r = np.deg2rad
+        
+        tp, dtp, tm, dtm, tsym, dtsym, tasym, dtasym = vals['T']
+        rp, drp, rm, drm, rsym, drsym, rasym, drasym = vals['R']
+        
+        phase_rad = d2r(phase_deg)
+        tpr, dtpr, tmr, dtmr = d2r(tp), d2r(dtp), d2r(tm), d2r(dtm)
+        xparr = unp.uarray(rp, drp) * unp.cos(unp.uarray(tpr, dtpr) + phase_rad)
+        xmarr = unp.uarray(rm, drm) * unp.cos(unp.uarray(tmr, dtmr) + phase_rad)
+        yparr = unp.uarray(rp, drp) * unp.sin(unp.uarray(tpr, dtpr) + phase_rad)
+        ymarr = unp.uarray(rm, drm) * unp.sin(unp.uarray(tmr, dtmr) + phase_rad)
+        
+        (xsym, dxsym), (xasym, dxasym) = [_usplit(arr) for arr in _sym_asym(xparr, xmarr)]
+        xvals = (*_usplit(xparr), *_usplit(xmarr), xsym, dxsym, xasym, dxasym)
+        
+        (ysym, dysym), (yasym, dyasym) = [_usplit(arr) for arr in _sym_asym(yparr, ymarr)]
+        yvals = (*_usplit(yparr), *_usplit(ymarr), ysym, dysym, yasym, dyasym)
+        
+        _variables_to_namespace(res, 'X', xvals)
+        _variables_to_namespace(res, 'Y', yvals)
+        
+            
     res.xum = data['displ(um)']
     
     if date < 170727:
@@ -348,6 +381,40 @@ def load_sotpmoke_data(datapath, take_slice=None, date=0):
     res.df = data
     
     return res
+     
+#    tcols = ('T+mean(deg)', 'T+std(deg)', 'T-mean(deg)', 'T-std(deg)')
+#    res.rp, res.drp, res.Tm, res.dTm = [data[col] for col in tcols]
+#    res.Tsym = (res.Tp + res.Tm)/2
+#    res.Tasym = (res.Tp - res.Tm)/2
+#    
+#    rcols = ('R+mean(V)', 'R+std(V)', 'R-mean(V)', 'R-std(V)')
+#    res.Rp, res.dRp, res.Rm, res.dRm = [data[col] for col in rcols]
+#    res.Rsym = (res.Rp + res.Rm)/2
+#    res.Rasym = (res.Rp - res.Rm)/2
+#  
+#    if phase_deg == 0 or phase_deg is None:
+#    
+#        xcols = ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')
+#        res.Xp, res.dXp, res.Xm, res.dXm = [data[col] for col in xcols]
+#        Xsym = (unp.uarray(res.Xp, res.dXp) + unp.uarray(res.Xm, res.dXm))/2
+#        res.Xsym = unp.nominal_values(Xsym)
+#        res.dXsym = unp.std_devs(Xsym)
+#        Xasym = (unp.uarray(res.Xp, res.dXp) - unp.uarray(res.Xm, res.dXm))/2
+#        res.Xasym = unp.nominal_values(Xasym)
+#        res.dXasym = unp.std_devs(Xasym)
+#        
+#        ycols = ('Y+mean(V)', 'Y+std(V)', 'Y-mean(V)', 'Y-std(V)')
+#        res.Yp, res.dYp, res.Ym, res.dYm = [data[col] for col in ycols]
+#        Ysym = (unp.uarray(res.Yp, res.dYp) + unp.uarray(res.Ym, res.dYm))/2
+#        res.Ysym = unp.nominal_values(Xsym)
+#        res.dYsym = unp.std_devs(Ysym)
+#        Yasym = (unp.uarray(res.Yp, res.dYp) - unp.uarray(res.Ym, res.dYm))/2
+#        res.Yasym = unp.nominal_values(Yasym)
+#        res.dYasym = unp.std_devs(Yasym)
+#    
+    
+#    else:     
+
 
 
 def plot_raw_data(d):
