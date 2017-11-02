@@ -284,8 +284,6 @@ def _load_variable_pair(data, cols):
     sym, dsym = unp.nominal_values(symarr), unp.std_devs(symarr)
     asym, dasym = unp.nominal_values(asymarr), unp.std_devs(asymarr)
     return p, dp , m , dm , sym, dsym, asym, dasym
-#    return {'p': p, 'dp': dp, 'm': m, 'dm': dm, 'sym': sym, 'dsym': dsym, 
-#            'asym': asym, 'dasym': dasym}
 
 
 def _variables_to_namespace(namespace, name_prefix, vals):
@@ -381,40 +379,6 @@ def load_sotpmoke_data(datapath, take_slice=None, date=0, phase_deg=0):
     res.df = data
     
     return res
-     
-#    tcols = ('T+mean(deg)', 'T+std(deg)', 'T-mean(deg)', 'T-std(deg)')
-#    res.rp, res.drp, res.Tm, res.dTm = [data[col] for col in tcols]
-#    res.Tsym = (res.Tp + res.Tm)/2
-#    res.Tasym = (res.Tp - res.Tm)/2
-#    
-#    rcols = ('R+mean(V)', 'R+std(V)', 'R-mean(V)', 'R-std(V)')
-#    res.Rp, res.dRp, res.Rm, res.dRm = [data[col] for col in rcols]
-#    res.Rsym = (res.Rp + res.Rm)/2
-#    res.Rasym = (res.Rp - res.Rm)/2
-#  
-#    if phase_deg == 0 or phase_deg is None:
-#    
-#        xcols = ('X+mean(V)', 'X+std(V)', 'X-mean(V)', 'X-std(V)')
-#        res.Xp, res.dXp, res.Xm, res.dXm = [data[col] for col in xcols]
-#        Xsym = (unp.uarray(res.Xp, res.dXp) + unp.uarray(res.Xm, res.dXm))/2
-#        res.Xsym = unp.nominal_values(Xsym)
-#        res.dXsym = unp.std_devs(Xsym)
-#        Xasym = (unp.uarray(res.Xp, res.dXp) - unp.uarray(res.Xm, res.dXm))/2
-#        res.Xasym = unp.nominal_values(Xasym)
-#        res.dXasym = unp.std_devs(Xasym)
-#        
-#        ycols = ('Y+mean(V)', 'Y+std(V)', 'Y-mean(V)', 'Y-std(V)')
-#        res.Yp, res.dYp, res.Ym, res.dYm = [data[col] for col in ycols]
-#        Ysym = (unp.uarray(res.Yp, res.dYp) + unp.uarray(res.Ym, res.dYm))/2
-#        res.Ysym = unp.nominal_values(Xsym)
-#        res.dYsym = unp.std_devs(Ysym)
-#        Yasym = (unp.uarray(res.Yp, res.dYp) - unp.uarray(res.Ym, res.dYm))/2
-#        res.Yasym = unp.nominal_values(Yasym)
-#        res.dYasym = unp.std_devs(Yasym)
-#    
-    
-#    else:     
-
 
 
 def plot_raw_data(d):
@@ -484,14 +448,14 @@ def plot_phased_data(d, phi_deg=35):
      + hv.Curve((d.xum, Xsym_ph), label='Xsym') * hv.Curve((d.xum, Xasym_ph), label='Xasym'))
 
 
-def plot_phase_exploration(d):    
+def plot_phase_exploration(d, phi0=-180, phi1=185):    
     gridspace = hv.GridSpace(kdims=['type'])
     
     X_curves = {}
     Y_curves = {}
     sym_curves = {}
     
-    for phi in range(0, 185, 5):
+    for phi in range(-180, 185, 5):
         Xp_ph = d.Rp * np.cos(np.deg2rad(d.Tp + phi))
         Xm_ph = d.Rm * np.cos(np.deg2rad(d.Tm + phi))
         Yp_ph = d.Rp * np.sin(np.deg2rad(d.Tp + phi))
